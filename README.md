@@ -1,3 +1,4 @@
+
 # SmartSort
 
 <p align="center">
@@ -40,6 +41,7 @@ Decision Logic
   +----> Metal
   +----> Organic
   +----> Reject
+```
 
 The project is being developed as a hackathon prototype, with the computer-vision pipeline currently functioning and hardware integration being developed alongside it.
 
