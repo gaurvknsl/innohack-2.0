@@ -23,6 +23,7 @@ function App() {
       const items = itemRefs.current;
       if (!machine || !bins || items.length !== 3) return;
       gsap.set([machine, ...items], { clearProps: 'transform' });
+      gsap.set(items, { autoAlpha: 1, x: 0, y: 0, scale: 1 });
       statusRef.current.textContent = 'ready to sort..';
       if (reduceMotion) return;
 
@@ -56,6 +57,7 @@ function App() {
           .to(items[index], { x: `+=${carryX}`, y: `+=${carryY}`, duration: 1.35, ease: 'power2.inOut' }, '<')
           .to(machine, { y: '+=10', duration: 0.3, ease: 'power2.in' })
           .to(items[index], { y: '+=18', scale: 0.78, duration: 0.45, ease: 'bounce.out' })
+          .to(items[index], { autoAlpha: 0, scale: 0.68, duration: 0.22, ease: 'power1.in' })
           .call(() => { statusRef.current.textContent = `${name} sorted..`; });
         machineX += reachX + carryX;
         itemX[index] += carryX;
@@ -64,7 +66,7 @@ function App() {
 
       timeline.call(() => { statusRef.current.textContent = 'sorting complete..'; })
         .to(machine, { x: `-=${machineX}`, duration: 1.4, ease: 'power3.inOut' })
-        .to(items, { x: 0, y: 0, scale: 1, duration: 0.8, ease: 'power2.out' })
+        .set(items, { autoAlpha: 1, x: 0, y: 0, scale: 1 })
         .call(() => { statusRef.current.textContent = 'ready to sort..'; });
     });
     return () => context.revert();
