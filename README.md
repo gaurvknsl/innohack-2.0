@@ -1,4 +1,3 @@
-````markdown
 # SmartSort
 
 <p align="center">
@@ -41,7 +40,6 @@ Decision Logic
   +----> Metal
   +----> Organic
   +----> Reject
-````
 
 The project is being developed as a hackathon prototype, with the computer-vision pipeline currently functioning and hardware integration being developed alongside it.
 
@@ -525,4 +523,3 @@ SmartSort was developed as a hackathon project. A formal open-source license can
   <br>
   See it. Understand it. Sort it.
 </p>
-```
