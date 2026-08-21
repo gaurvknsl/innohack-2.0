@@ -9,7 +9,6 @@ __pycache__/
 *.py[cod]
 
 # ML model weights
-*.pt
 *.onnx
 
 # Python/ML generated files
