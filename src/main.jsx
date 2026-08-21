@@ -11,7 +11,7 @@ const assets = {
 };
 
 function App() {
-  const [route, setRoute] = useState(() => window.location.pathname === '/dashboard' ? 'dashboard' : 'landing');
+  const [route, setRoute] = useState(() => window.location.pathname === '/live-sorting' ? 'live-sorting' : window.location.pathname === '/dashboard' ? 'dashboard' : 'landing');
   const [transitioning, setTransitioning] = useState(false);
   const [systemStatus, setSystemStatus] = useState({ camera: false, opencv: false, classifier: false, conveyor: false, arduino: false });
   const transitionRef = useRef(null);
@@ -40,7 +40,7 @@ function App() {
     setRoute('live-sorting');
   };
   useLayoutEffect(() => {
-    const onPopState = () => setRoute(window.location.pathname === '/dashboard' ? 'dashboard' : 'landing');
+    const onPopState = () => setRoute(window.location.pathname === '/live-sorting' ? 'live-sorting' : window.location.pathname === '/dashboard' ? 'dashboard' : 'landing');
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
@@ -240,6 +240,13 @@ function Dashboard({ onLiveSorting }) {
       if (!label || !scanner || icons.length !== scanCategories.length) return;
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       gsap.set(icons, { opacity: 0.28, scale: 1, filter: 'saturate(0.45)' });
+      const track = scanner.parentElement;
+      const trackBox = track.getBoundingClientRect();
+      const positions = icons.map((icon) => {
+        const box = icon.getBoundingClientRect();
+        return { x: box.left - trackBox.left + (box.width - scanner.offsetWidth) / 2, y: box.top - trackBox.top + (box.height - scanner.offsetHeight) / 2 };
+      });
+      gsap.set(scanner, { x: positions[0].x, y: positions[0].y, xPercent: 0, yPercent: 0 });
       if (reducedMotion) {
         gsap.set(icons[0], { opacity: 1, scale: 1.05, filter: 'none' });
         gsap.set(scanner, { opacity: 0 });
@@ -254,11 +261,11 @@ function Dashboard({ onLiveSorting }) {
           progress.value = 0;
           gsap.set(icons, { opacity: 0.28, scale: 1, filter: 'saturate(0.45)' });
           gsap.set(icon, { opacity: 1, filter: 'none' });
-          gsap.set(scanner, { xPercent: 0, opacity: 1 });
           label.textContent = `${category.name} · 0%`;
         })
+          .to(scanner, { x: positions[index].x, y: positions[index].y, opacity: 1, duration: index === 0 ? 0 : 0.45, ease: 'power2.inOut' })
           .to(progress, { value: 100, duration: 2.2, ease: 'power1.inOut', onUpdate: () => { label.textContent = `${category.name} · ${Math.round(progress.value)}%`; } })
-          .to(scanner, { xPercent: 100, duration: 2.2, ease: 'power1.inOut' }, '<')
+          .to({}, { duration: 2.2, ease: 'none' }, '<')
           .to(icon, { scale: 1.1, duration: 0.42, ease: 'sine.inOut', repeat: 2, yoyo: true }, '<0.15')
           .to({}, { duration: 0.3 });
       });
@@ -267,19 +274,11 @@ function Dashboard({ onLiveSorting }) {
   }, []);
   const systemRows = [['CAMERA', 'camera'], ['OPENCV ENGINE', 'opencv'], ['AI CLASSIFIER', 'classifier'], ['CONVEYOR', 'conveyor'], ['ARDUINO', 'arduino']];
   return <main className="dashboard-page">
-    <aside className="sidebar">
-      <h1>Smart Waste Sorting System</h1>
-      <p className="sidebar-subtitle">AI-powered waste classification</p>
-      <div className="side-nav">
-        <div className="nav-item active">Dashboard</div><button className="nav-item nav-button" onClick={onLiveSorting}>Live Sorting</button>
-        <div className="nav-item">Analytics</div><div className="nav-item">History</div><div className="nav-item">Settings</div>
-      </div>
-    </aside>
     <section className="dashboard-main">
       <header className="dashboard-header"><div><h2>Good morning, User!</h2><p>Here's what's happening with your system today.</p></div></header>
       <div className="metrics"><MetricCard tone="plastic" icon={<img src={assets.trash} alt="" />} label="PLASTIC" value="124" today="+12 today" /><MetricCard tone="metal" icon={<img src={assets.foodCan} alt="" />} label="METAL" value="86" today="+8 today" /><MetricCard tone="organic" icon={<img src={assets.leafIcon} alt="" />} label="ORGANIC" value="93" today="+15 today" /></div>
       <div className="dashboard-grid">
-        <section className="panel live-panel"><h3>LIVE SORTING</h3><p className="panel-subtitle">Real-time waste detection</p><div className="flow-track"><span ref={scanLabelRef} className="flow-label">PLASTIC · 0%</span><div className="detection-box"><img ref={(node) => { scanIconRefs.current[0] = node; }} src={assets.trash} alt="Plastic waste" /></div><div className="flow-line"><span ref={scannerRef} className="flow-scanner" /></div><img ref={(node) => { scanIconRefs.current[1] = node; }} className="flow-can" src={assets.foodCan} alt="Metal waste" /><img ref={(node) => { scanIconRefs.current[2] = node; }} className="flow-leaf" src={assets.leafIcon} alt="Organic waste" /><span className="flow-caption">SORTING FLOW</span></div><div className="live-details"><div><small>CURRENT DETECTION</small><b>PLASTIC BOTTLE</b></div><div><small>CONFIDENCE</small><b className="purple">94.2%</b></div><div><small>DESTINATION</small><b className="blue">PLASTIC BIN</b></div></div></section>
+        <section className="panel live-panel live-panel-clickable" onClick={onLiveSorting} role="link" tabIndex="0" onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onLiveSorting(); }}><h3>LIVE SORTING</h3><p className="panel-subtitle">Real-time waste detection</p><div className="flow-track"><span ref={scanLabelRef} className="flow-label">PLASTIC · 0%</span><div className="flow-icons"><div className="flow-icon-slot"><img ref={(node) => { scanIconRefs.current[0] = node; }} src={assets.trash} alt="Plastic waste" /></div><div className="flow-icon-slot"><img ref={(node) => { scanIconRefs.current[1] = node; }} src={assets.foodCan} alt="Metal waste" /></div><div className="flow-icon-slot"><img ref={(node) => { scanIconRefs.current[2] = node; }} src={assets.leafIcon} alt="Organic waste" /></div><div ref={scannerRef} className="detection-box"><span /></div></div><div className="flow-line"><span className="flow-scanner" /></div><span className="flow-caption">SORTING FLOW</span></div><div className="live-details"><div><small>CURRENT DETECTION</small><b>PLASTIC BOTTLE</b></div><div><small>CONFIDENCE</small><b className="purple">94.2%</b></div><div><small>DESTINATION</small><b className="blue">PLASTIC BIN</b></div></div></section>
         <section className="panel system-panel"><h3>SYSTEM STATUS</h3><p className="panel-subtitle">Hardware &amp; Software</p>{systemRows.map(([name, key]) => <div className="system-row" key={name}><span>{name}</span><b className={liveStatus[key] ? 'online' : 'offline'}>{liveStatus[key] ? 'Connected' : 'Disconnected'}</b></div>)}<div className="last-sorted"><small>LAST SORTED</small><strong>Plastic</strong><span>94.2% · Plastic Bin</span></div></section>
       </div>
       <section className="activity"><h3>TODAY’S SORTING ACTIVITY</h3><div className="activity-card"><ActivityRow label="PLASTIC" value="124" width="100%" tone="plastic" /><ActivityRow label="ORGANIC" value="93" width="75%" tone="organic" /><ActivityRow label="METAL" value="86" width="69%" tone="metal" /></div></section>
