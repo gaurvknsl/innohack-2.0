@@ -209,7 +209,7 @@ function MetricCard({ tone, icon, label, value, today }) {
 }
 
 function Dashboard({ onLiveSorting }) {
-  const [liveStatus, setLiveStatus] = useState({ camera: false, opencv: false, classifier: false, conveyor: false, arduino: false });
+  const [liveStatus, setLiveStatus] = useState({ camera: false, opencv: false, classifier: false, data: { sortedCounts: { PLASTIC: 124, METAL: 86, ORGANIC: 93 } } });
   const scanLabelRef = useRef(null);
   const scannerRef = useRef(null);
   const scanIconRefs = useRef([]);
@@ -225,13 +225,15 @@ function Dashboard({ onLiveSorting }) {
       try {
         const response = await fetch('/api/status', { cache: 'no-store' });
         const payload = await response.json();
-        if (!cancelled) setLiveStatus(payload.components || payload);
+        if (!cancelled) setLiveStatus(payload);
       } catch { /* The status panel remains safely disconnected while the API is offline. */ }
       if (!cancelled) timer = window.setTimeout(poll, 1500);
     };
     poll();
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, []);
+  const sortedCounts = liveStatus.data?.sortedCounts || { PLASTIC: 124, METAL: 86, ORGANIC: 93 };
+  const maxSorted = Math.max(sortedCounts.PLASTIC, sortedCounts.METAL, sortedCounts.ORGANIC, 1);
   useLayoutEffect(() => {
     const context = gsap.context(() => {
       const icons = scanIconRefs.current.filter(Boolean);
@@ -272,16 +274,16 @@ function Dashboard({ onLiveSorting }) {
     });
     return () => context.revert();
   }, []);
-  const systemRows = [['CAMERA', 'camera'], ['OPENCV ENGINE', 'opencv'], ['AI CLASSIFIER', 'classifier'], ['CONVEYOR', 'conveyor'], ['ARDUINO', 'arduino']];
+  const systemRows = [['CAMERA', 'camera'], ['OPENCV ENGINE', 'opencv'], ['AI CLASSIFIER', 'classifier']];
   return <main className="dashboard-page">
     <section className="dashboard-main">
       <header className="dashboard-header"><div><h2>Good morning, User!</h2><p>Here's what's happening with your system today.</p></div></header>
-      <div className="metrics"><MetricCard tone="plastic" icon={<img src={assets.trash} alt="" />} label="PLASTIC" value="124" today="+12 today" /><MetricCard tone="metal" icon={<img src={assets.foodCan} alt="" />} label="METAL" value="86" today="+8 today" /><MetricCard tone="organic" icon={<img src={assets.leafIcon} alt="" />} label="ORGANIC" value="93" today="+15 today" /></div>
+      <div className="metrics"><MetricCard tone="plastic" icon={<img src={assets.trash} alt="" />} label="PLASTIC" value={sortedCounts.PLASTIC} today="live count" /><MetricCard tone="metal" icon={<img src={assets.foodCan} alt="" />} label="METAL" value={sortedCounts.METAL} today="live count" /><MetricCard tone="organic" icon={<img src={assets.leafIcon} alt="" />} label="ORGANIC" value={sortedCounts.ORGANIC} today="live count" /></div>
       <div className="dashboard-grid">
         <section className="panel live-panel live-panel-clickable" onClick={onLiveSorting} role="link" tabIndex="0" onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onLiveSorting(); }}><h3>LIVE SORTING</h3><p className="panel-subtitle">Real-time waste detection</p><div className="flow-track"><span ref={scanLabelRef} className="flow-label">PLASTIC · 0%</span><div className="flow-icons"><div className="flow-icon-slot"><img ref={(node) => { scanIconRefs.current[0] = node; }} src={assets.trash} alt="Plastic waste" /></div><div className="flow-icon-slot"><img ref={(node) => { scanIconRefs.current[1] = node; }} src={assets.foodCan} alt="Metal waste" /></div><div className="flow-icon-slot"><img ref={(node) => { scanIconRefs.current[2] = node; }} src={assets.leafIcon} alt="Organic waste" /></div><div ref={scannerRef} className="detection-box"><span /></div></div><div className="flow-line"><span className="flow-scanner" /></div><span className="flow-caption">SORTING FLOW</span></div><div className="live-details"><div><small>CURRENT DETECTION</small><b>PLASTIC BOTTLE</b></div><div><small>CONFIDENCE</small><b className="purple">94.2%</b></div><div><small>DESTINATION</small><b className="blue">PLASTIC BIN</b></div></div></section>
         <section className="panel system-panel"><h3>SYSTEM STATUS</h3><p className="panel-subtitle">Hardware &amp; Software</p>{systemRows.map(([name, key]) => <div className="system-row" key={name}><span>{name}</span><b className={liveStatus[key] ? 'online' : 'offline'}>{liveStatus[key] ? 'Connected' : 'Disconnected'}</b></div>)}<div className="last-sorted"><small>LAST SORTED</small><strong>Plastic</strong><span>94.2% · Plastic Bin</span></div></section>
       </div>
-      <section className="activity"><h3>TODAY’S SORTING ACTIVITY</h3><div className="activity-card"><ActivityRow label="PLASTIC" value="124" width="100%" tone="plastic" /><ActivityRow label="ORGANIC" value="93" width="75%" tone="organic" /><ActivityRow label="METAL" value="86" width="69%" tone="metal" /></div></section>
+      <section className="activity"><h3>TODAY’S SORTING ACTIVITY</h3><div className="activity-card"><ActivityRow label="PLASTIC" value={sortedCounts.PLASTIC} width={`${sortedCounts.PLASTIC / maxSorted * 100}%`} tone="plastic" /><ActivityRow label="ORGANIC" value={sortedCounts.ORGANIC} width={`${sortedCounts.ORGANIC / maxSorted * 100}%`} tone="organic" /><ActivityRow label="METAL" value={sortedCounts.METAL} width={`${sortedCounts.METAL / maxSorted * 100}%`} tone="metal" /></div></section>
     </section>
   </main>;
 }

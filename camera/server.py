@@ -47,6 +47,14 @@ state = {
     "stableFrames": STABLE_FRAMES,
 
     "updatedAt": None,
+
+    # Temporary bypass: a stable model detection is treated as sorted
+    # immediately until the conveyor/Arduino integration is connected.
+    "sortedCounts": {
+        "PLASTIC": 0,
+        "METAL": 0,
+        "ORGANIC": 0,
+    },
 }
 
 latest_frame = b""
@@ -204,6 +212,9 @@ def run_vision():
                     last_decision = stable_prediction
                     last_decision_confidence = confidence
                     last_decision_time = now
+
+                    if last_decision in state["sortedCounts"]:
+                        state["sortedCounts"][last_decision] += 1
 
                     print()
                     print("========================================")
@@ -428,8 +439,12 @@ class Handler(BaseHTTPRequestHandler):
                     "stableFrames":
                         state["stableFrames"],
 
-                    "updatedAt":
+                        "updatedAt":
                         state["updatedAt"]
+                    ,
+
+                    "sortedCounts":
+                        state["sortedCounts"]
                 }
             }
 
