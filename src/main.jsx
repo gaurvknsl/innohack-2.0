@@ -209,7 +209,7 @@ function MetricCard({ tone, icon, label, value, today }) {
 }
 
 function Dashboard({ onLiveSorting }) {
-  const [liveStatus, setLiveStatus] = useState({ camera: false, opencv: false, classifier: false, data: { sortedCounts: { PLASTIC: 124, METAL: 86, ORGANIC: 93 } } });
+  const [liveStatus, setLiveStatus] = useState({ camera: false, opencv: false, classifier: false, data: { sortedCounts: { PLASTIC: 0, METAL: 0, ORGANIC: 0 } } });
   const scanLabelRef = useRef(null);
   const scannerRef = useRef(null);
   const scanIconRefs = useRef([]);
@@ -232,8 +232,13 @@ function Dashboard({ onLiveSorting }) {
     poll();
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, []);
-  const sortedCounts = liveStatus.data?.sortedCounts || { PLASTIC: 124, METAL: 86, ORGANIC: 93 };
+  const data = liveStatus.data || {};
+  const sortedCounts = data.sortedCounts || { PLASTIC: 0, METAL: 0, ORGANIC: 0 };
   const maxSorted = Math.max(sortedCounts.PLASTIC, sortedCounts.METAL, sortedCounts.ORGANIC, 1);
+  const classification = data.classification || 'NONE';
+  const confidence = Number(data.confidence || 0);
+  const decision = data.decision || 'NONE';
+  const decisionConfidence = Number(data.decisionConfidence || 0);
   useLayoutEffect(() => {
     const context = gsap.context(() => {
       const icons = scanIconRefs.current.filter(Boolean);
@@ -280,8 +285,8 @@ function Dashboard({ onLiveSorting }) {
       <header className="dashboard-header"><div><h2>Good morning, User!</h2><p>Here's what's happening with your system today.</p></div></header>
       <div className="metrics"><MetricCard tone="plastic" icon={<img src={assets.trash} alt="" />} label="PLASTIC" value={sortedCounts.PLASTIC} today="live count" /><MetricCard tone="metal" icon={<img src={assets.foodCan} alt="" />} label="METAL" value={sortedCounts.METAL} today="live count" /><MetricCard tone="organic" icon={<img src={assets.leafIcon} alt="" />} label="ORGANIC" value={sortedCounts.ORGANIC} today="live count" /></div>
       <div className="dashboard-grid">
-        <section className="panel live-panel live-panel-clickable" onClick={onLiveSorting} role="link" tabIndex="0" onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onLiveSorting(); }}><h3>LIVE SORTING</h3><p className="panel-subtitle">Real-time waste detection</p><div className="flow-track"><span ref={scanLabelRef} className="flow-label">PLASTIC · 0%</span><div className="flow-icons"><div className="flow-icon-slot"><img ref={(node) => { scanIconRefs.current[0] = node; }} src={assets.trash} alt="Plastic waste" /></div><div className="flow-icon-slot"><img ref={(node) => { scanIconRefs.current[1] = node; }} src={assets.foodCan} alt="Metal waste" /></div><div className="flow-icon-slot"><img ref={(node) => { scanIconRefs.current[2] = node; }} src={assets.leafIcon} alt="Organic waste" /></div><div ref={scannerRef} className="detection-box"><span /></div></div><div className="flow-line"><span className="flow-scanner" /></div><span className="flow-caption">SORTING FLOW</span></div><div className="live-details"><div><small>CURRENT DETECTION</small><b>PLASTIC BOTTLE</b></div><div><small>CONFIDENCE</small><b className="purple">94.2%</b></div><div><small>DESTINATION</small><b className="blue">PLASTIC BIN</b></div></div></section>
-        <section className="panel system-panel"><h3>SYSTEM STATUS</h3><p className="panel-subtitle">Hardware &amp; Software</p>{systemRows.map(([name, key]) => <div className="system-row" key={name}><span>{name}</span><b className={liveStatus[key] ? 'online' : 'offline'}>{liveStatus[key] ? 'Connected' : 'Disconnected'}</b></div>)}<div className="last-sorted"><small>LAST SORTED</small><strong>Plastic</strong><span>94.2% · Plastic Bin</span></div></section>
+        <section className="panel live-panel live-panel-clickable" onClick={onLiveSorting} role="link" tabIndex="0" onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onLiveSorting(); }}><h3>LIVE SORTING</h3><p className="panel-subtitle">Real-time waste detection</p><div className="flow-track"><span ref={scanLabelRef} className="flow-label">PLASTIC · 0%</span><div className="flow-icons"><div className="flow-icon-slot"><img ref={(node) => { scanIconRefs.current[0] = node; }} src={assets.trash} alt="Plastic waste" /></div><div className="flow-icon-slot"><img ref={(node) => { scanIconRefs.current[1] = node; }} src={assets.foodCan} alt="Metal waste" /></div><div className="flow-icon-slot"><img ref={(node) => { scanIconRefs.current[2] = node; }} src={assets.leafIcon} alt="Organic waste" /></div><div ref={scannerRef} className="detection-box"><span /></div></div><div className="flow-line"><span className="flow-scanner" /></div><span className="flow-caption">SORTING FLOW</span></div><div className="live-details"><div><small>CURRENT DETECTION</small><b>{classification}</b></div><div><small>CONFIDENCE</small><b className="purple">{(confidence * 100).toFixed(1)}%</b></div><div><small>DESTINATION</small><b className="blue">{decision} · {(decisionConfidence * 100).toFixed(1)}%</b></div></div></section>
+        <section className="panel system-panel"><h3>SYSTEM STATUS</h3><p className="panel-subtitle">Hardware &amp; Software</p>{systemRows.map(([name, key]) => <div className="system-row" key={name}><span>{name}</span><b className={liveStatus.components?.[key] ? 'online' : 'offline'}>{liveStatus.components?.[key] ? 'Connected' : 'Disconnected'}</b></div>)}<div className="last-sorted"><small>LAST SORTED</small><strong>{decision}</strong><span>{decision === 'NONE' ? '—' : `${(decisionConfidence * 100).toFixed(1)}% · ${decision} Bin`}</span></div></section>
       </div>
       <section className="activity"><h3>TODAY’S SORTING ACTIVITY</h3><div className="activity-card"><ActivityRow label="PLASTIC" value={sortedCounts.PLASTIC} width={`${sortedCounts.PLASTIC / maxSorted * 100}%`} tone="plastic" /><ActivityRow label="ORGANIC" value={sortedCounts.ORGANIC} width={`${sortedCounts.ORGANIC / maxSorted * 100}%`} tone="organic" /><ActivityRow label="METAL" value={sortedCounts.METAL} width={`${sortedCounts.METAL / maxSorted * 100}%`} tone="metal" /></div></section>
     </section>

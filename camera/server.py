@@ -5,6 +5,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from collections import Counter
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
 MODEL_PATH = ROOT / "best.pt"
@@ -88,7 +89,13 @@ def run_vision():
         print("Model loaded.")
         print("Classes:", model.names)
 
-        camera = cv2.VideoCapture(CAMERA_INDEX)
+        # MSMF can report that a webcam opened while failing on the first
+        # frame read. Prefer DirectShow on Windows, then fall back to the
+        # default backend for other platforms/configurations.
+        camera = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_DSHOW) if os.name == "nt" else cv2.VideoCapture(CAMERA_INDEX)
+        if not camera.isOpened() and os.name == "nt":
+            camera.release()
+            camera = cv2.VideoCapture(CAMERA_INDEX)
 
         camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
@@ -112,9 +119,16 @@ def run_vision():
             ok, frame = camera.read()
 
             if not ok:
-                print("ERROR: Could not read camera frame.")
+                print("ERROR: Could not read camera frame; retrying...")
                 state["camera"] = False
-                break
+                time.sleep(0.25)
+                camera.release()
+                camera = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_DSHOW) if os.name == "nt" else cv2.VideoCapture(CAMERA_INDEX)
+                state["camera"] = camera.isOpened()
+                if not state["camera"]:
+                    print("ERROR: Could not reopen camera.")
+                    break
+                continue
 
             # ------------------------------------------------
             # YOLO INFERENCE
@@ -330,11 +344,27 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
 
+        path = urlparse(self.path).path
+
+        if path == "/":
+            body = json.dumps({
+                "service": "SmartSort API",
+                "status": "ok",
+                "endpoints": ["/api/status", "/api/health", "/api/stream"],
+            }).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         # ----------------------------------------------------
         # LIVE CAMERA STREAM
         # ----------------------------------------------------
 
-        if self.path == "/api/stream":
+        if path == "/api/stream":
 
             self.send_response(200)
 
@@ -390,7 +420,7 @@ class Handler(BaseHTTPRequestHandler):
         # STATUS API
         # ----------------------------------------------------
 
-        if self.path in (
+        if path in (
             "/api/status",
             "/api/health"
         ):
