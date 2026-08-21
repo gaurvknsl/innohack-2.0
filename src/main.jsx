@@ -6,10 +6,107 @@ import './styles.css';
 const assets = {
   corners: '/svg/corners.svg', oakLeaves: '/svg/oakleaf.svg', machine: '/svg/machine.svg',
   belt: '/svg/belt.svg', bins: '/svg/dustbins.svg', bottle: '/svg/bottle.svg',
-  can: '/svg/can.svg', leaves: '/svg/leaves.svg'
+  can: '/svg/can.svg', leaves: '/svg/leaves.svg', trash: '/svg/pinhead_bag-of-trash.svg',
+  foodCan: '/svg/game-icons_opened-food-can.svg', leafIcon: '/svg/mdi_leaf.svg'
 };
 
 function App() {
+  const [route, setRoute] = useState(() => window.location.pathname === '/dashboard' ? 'dashboard' : 'landing');
+  const [transitioning, setTransitioning] = useState(false);
+  const [systemStatus, setSystemStatus] = useState({ camera: false, opencv: false, classifier: false, conveyor: false, arduino: false });
+  const transitionRef = useRef(null);
+  const landingFaceRef = useRef(null);
+  const dashboardFaceRef = useRef(null);
+  const navigateToDashboard = () => {
+    if (transitioning || route === 'dashboard') return;
+    setTransitioning(true);
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) {
+      window.history.pushState({}, '', '/dashboard');
+      setRoute('dashboard');
+      setTransitioning(false);
+      return;
+    }
+    const timeline = gsap.timeline({ onComplete: () => {
+      window.history.pushState({}, '', '/dashboard');
+      setRoute('dashboard');
+      setTransitioning(false);
+    } });
+    timeline.to(transitionRef.current, { scale: 1.06, duration: 0.3, ease: 'power2.in' })
+      .to(transitionRef.current, { rotationY: 180, duration: 0.85, ease: 'power3.inOut' });
+  };
+  const navigateToLiveSorting = () => {
+    window.history.pushState({}, '', '/live-sorting');
+    setRoute('live-sorting');
+  };
+  useLayoutEffect(() => {
+    const onPopState = () => setRoute(window.location.pathname === '/dashboard' ? 'dashboard' : 'landing');
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+  useLayoutEffect(() => {
+    if (route === 'dashboard') return undefined;
+    let cancelled = false;
+    let timer;
+    const poll = async () => {
+      try {
+        const response = await fetch('/api/status', { cache: 'no-store' });
+        if (!response.ok) throw new Error('status unavailable');
+        const next = await response.json();
+        if (!cancelled) {
+          setSystemStatus(next.components || next);
+        }
+      } catch {
+        if (!cancelled) setSystemStatus({ camera: false, opencv: false, classifier: false, conveyor: false, arduino: false });
+      } finally {
+        if (!cancelled) timer = window.setTimeout(poll, 1500);
+      }
+    };
+    poll();
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [route, transitioning]);
+  useLayoutEffect(() => {
+    let touchStartY = 0;
+    const onWheel = (event) => {
+      const scrollingForward = event.deltaY > 0 && route === 'landing';
+      const scrollingBack = event.deltaY < 0 && route === 'dashboard';
+      if (scrollingForward || scrollingBack) {
+        event.preventDefault();
+        if (scrollingForward) {
+          navigateToDashboard();
+        } else if (!transitioning) {
+          setTransitioning(true);
+          const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          const finish = () => {
+            window.history.pushState({}, '', '/');
+            setRoute('landing');
+            setTransitioning(false);
+          };
+          if (reduced) finish();
+          else gsap.timeline({ onComplete: finish })
+            .to(transitionRef.current, { scale: 1.06, duration: 0.3, ease: 'power2.in' })
+            .to(transitionRef.current, { rotationY: 0, duration: 0.85, ease: 'power3.inOut' });
+        }
+      }
+    };
+    const onTouchStart = (event) => { touchStartY = event.touches[0].clientY; };
+    const onTouchEnd = (event) => {
+      const delta = touchStartY - event.changedTouches[0].clientY;
+      if (delta > 35 && route === 'landing') navigateToDashboard();
+      if (delta < -35 && route === 'dashboard' && !transitioning) {
+        window.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, cancelable: true }));
+      }
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [route, transitioning]);
+
   const [scale, setScale] = useState(() => Math.max(window.innerWidth / 1280, window.innerHeight / 800));
   const machineRef = useRef(null);
   const binsRef = useRef(null);
@@ -77,7 +174,10 @@ function App() {
     return () => window.removeEventListener('resize', resize);
   }, []);
 
-  return <main className="page"><div className="scene" style={{ '--scene-scale': scale }}>
+  if (route === 'live-sorting') return <LiveSorting onBack={() => { window.history.pushState({}, '', '/dashboard'); setRoute('dashboard'); }} />;
+
+  return <main className="page transition-viewport"><div ref={transitionRef} className={`transition-card ${route === 'dashboard' ? 'dashboard-initial' : ''}`}>
+    <div ref={landingFaceRef} className="transition-face landing-face"><div className="scene" style={{ '--scene-scale': scale }}>
     <header className="topbar"><img src={assets.corners} alt="" aria-hidden="true" /></header>
 
     <img className="leaf" src={assets.oakLeaves} alt="" aria-hidden="true" />
@@ -93,10 +193,127 @@ function App() {
       <img ref={binsRef} className="bins" src={assets.bins} alt="Metal, plastic and organic recycling bins" />
       <div className="copy">
         <h1 id="hero-title">Smart Waste Sorting System</h1>
-        <p ref={statusRef}>ready to sort..</p>
+        <p ref={statusRef} className="status-copy">{Object.values(systemStatus).every(Boolean) ? 'system connected..' : 'waiting for system..'}</p>
       </div>
     </section>
+    </div><div className="scroll-hint" aria-hidden="true"><span>Scroll down to open dashboard</span><i>↓</i></div></div>
+    <div ref={dashboardFaceRef} className="transition-face dashboard-face"><Dashboard onLiveSorting={navigateToLiveSorting} /></div>
   </div></main>;
 }
+
+function MetricCard({ tone, icon, label, value, today }) {
+  return <article className="metric-card">
+    <div className={`metric-icon ${tone}`}>{icon}</div>
+    <div><p className={`metric-label ${tone}`}>{label}</p><strong className={tone}>{value}</strong><small>{today}</small></div>
+  </article>;
+}
+
+function Dashboard({ onLiveSorting }) {
+  const [liveStatus, setLiveStatus] = useState({ camera: false, opencv: false, classifier: false, conveyor: false, arduino: false });
+  const scanLabelRef = useRef(null);
+  const scannerRef = useRef(null);
+  const scanIconRefs = useRef([]);
+  const scanCategories = [
+    { name: 'PLASTIC', icon: assets.trash },
+    { name: 'METAL', icon: assets.foodCan },
+    { name: 'ORGANIC', icon: assets.leafIcon },
+  ];
+  useLayoutEffect(() => {
+    let cancelled = false;
+    let timer;
+    const poll = async () => {
+      try {
+        const response = await fetch('/api/status', { cache: 'no-store' });
+        const payload = await response.json();
+        if (!cancelled) setLiveStatus(payload.components || payload);
+      } catch { /* The status panel remains safely disconnected while the API is offline. */ }
+      if (!cancelled) timer = window.setTimeout(poll, 1500);
+    };
+    poll();
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, []);
+  useLayoutEffect(() => {
+    const context = gsap.context(() => {
+      const icons = scanIconRefs.current.filter(Boolean);
+      const label = scanLabelRef.current;
+      const scanner = scannerRef.current;
+      if (!label || !scanner || icons.length !== scanCategories.length) return;
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      gsap.set(icons, { opacity: 0.28, scale: 1, filter: 'saturate(0.45)' });
+      if (reducedMotion) {
+        gsap.set(icons[0], { opacity: 1, scale: 1.05, filter: 'none' });
+        gsap.set(scanner, { opacity: 0 });
+        label.textContent = 'PLASTIC · 100%';
+        return;
+      }
+      const progress = { value: 0 };
+      const timeline = gsap.timeline({ repeat: -1, repeatDelay: 0.25 });
+      scanCategories.forEach((category, index) => {
+        const icon = icons[index];
+        timeline.call(() => {
+          progress.value = 0;
+          gsap.set(icons, { opacity: 0.28, scale: 1, filter: 'saturate(0.45)' });
+          gsap.set(icon, { opacity: 1, filter: 'none' });
+          gsap.set(scanner, { xPercent: 0, opacity: 1 });
+          label.textContent = `${category.name} · 0%`;
+        })
+          .to(progress, { value: 100, duration: 2.2, ease: 'power1.inOut', onUpdate: () => { label.textContent = `${category.name} · ${Math.round(progress.value)}%`; } })
+          .to(scanner, { xPercent: 100, duration: 2.2, ease: 'power1.inOut' }, '<')
+          .to(icon, { scale: 1.1, duration: 0.42, ease: 'sine.inOut', repeat: 2, yoyo: true }, '<0.15')
+          .to({}, { duration: 0.3 });
+      });
+    });
+    return () => context.revert();
+  }, []);
+  const systemRows = [['CAMERA', 'camera'], ['OPENCV ENGINE', 'opencv'], ['AI CLASSIFIER', 'classifier'], ['CONVEYOR', 'conveyor'], ['ARDUINO', 'arduino']];
+  return <main className="dashboard-page">
+    <aside className="sidebar">
+      <h1>Smart Waste Sorting System</h1>
+      <p className="sidebar-subtitle">AI-powered waste classification</p>
+      <div className="side-nav">
+        <div className="nav-item active">Dashboard</div><button className="nav-item nav-button" onClick={onLiveSorting}>Live Sorting</button>
+        <div className="nav-item">Analytics</div><div className="nav-item">History</div><div className="nav-item">Settings</div>
+      </div>
+    </aside>
+    <section className="dashboard-main">
+      <header className="dashboard-header"><div><h2>Good morning, User!</h2><p>Here's what's happening with your system today.</p></div></header>
+      <div className="metrics"><MetricCard tone="plastic" icon={<img src={assets.trash} alt="" />} label="PLASTIC" value="124" today="+12 today" /><MetricCard tone="metal" icon={<img src={assets.foodCan} alt="" />} label="METAL" value="86" today="+8 today" /><MetricCard tone="organic" icon={<img src={assets.leafIcon} alt="" />} label="ORGANIC" value="93" today="+15 today" /></div>
+      <div className="dashboard-grid">
+        <section className="panel live-panel"><h3>LIVE SORTING</h3><p className="panel-subtitle">Real-time waste detection</p><div className="flow-track"><span ref={scanLabelRef} className="flow-label">PLASTIC · 0%</span><div className="detection-box"><img ref={(node) => { scanIconRefs.current[0] = node; }} src={assets.trash} alt="Plastic waste" /></div><div className="flow-line"><span ref={scannerRef} className="flow-scanner" /></div><img ref={(node) => { scanIconRefs.current[1] = node; }} className="flow-can" src={assets.foodCan} alt="Metal waste" /><img ref={(node) => { scanIconRefs.current[2] = node; }} className="flow-leaf" src={assets.leafIcon} alt="Organic waste" /><span className="flow-caption">SORTING FLOW</span></div><div className="live-details"><div><small>CURRENT DETECTION</small><b>PLASTIC BOTTLE</b></div><div><small>CONFIDENCE</small><b className="purple">94.2%</b></div><div><small>DESTINATION</small><b className="blue">PLASTIC BIN</b></div></div></section>
+        <section className="panel system-panel"><h3>SYSTEM STATUS</h3><p className="panel-subtitle">Hardware &amp; Software</p>{systemRows.map(([name, key]) => <div className="system-row" key={name}><span>{name}</span><b className={liveStatus[key] ? 'online' : 'offline'}>{liveStatus[key] ? 'Connected' : 'Disconnected'}</b></div>)}<div className="last-sorted"><small>LAST SORTED</small><strong>Plastic</strong><span>94.2% · Plastic Bin</span></div></section>
+      </div>
+      <section className="activity"><h3>TODAY’S SORTING ACTIVITY</h3><div className="activity-card"><ActivityRow label="PLASTIC" value="124" width="100%" tone="plastic" /><ActivityRow label="ORGANIC" value="93" width="75%" tone="organic" /><ActivityRow label="METAL" value="86" width="69%" tone="metal" /></div></section>
+    </section>
+  </main>;
+}
+
+function LiveSorting({ onBack }) {
+  const [status, setStatus] = useState({ components: {}, data: { classification: 'NONE', confidence: 0 } });
+  useLayoutEffect(() => {
+    let cancelled = false;
+    let timer;
+    const poll = async () => {
+      try {
+        const response = await fetch('/api/status', { cache: 'no-store' });
+        const next = await response.json();
+        if (!cancelled) setStatus(next);
+      } catch { /* The disconnected state remains visible while the API is offline. */ }
+      if (!cancelled) timer = window.setTimeout(poll, 1000);
+    };
+    poll();
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, []);
+  const components = status.components || {};
+  const cameraReady = components.camera && components.opencv && components.classifier;
+  return <main className="live-page">
+    <header className="live-header"><button className="back-button" onClick={onBack}>← Dashboard</button><div><h1>Live Sorting</h1><p>Real-time waste detection from the OpenCV camera pipeline</p></div></header>
+    <section className="live-layout">
+      <div className="camera-card"><div className="camera-frame">{cameraReady ? <img src="/api/stream" alt="Live OpenCV camera feed" /> : <div className="camera-offline"><span>◎</span><strong>Camera disconnected</strong><small>Start the SmartSort backend to view detection.</small></div>}</div><div className="camera-footer"><span className={cameraReady ? 'online-dot' : 'offline-dot'} />{cameraReady ? 'Camera connected' : 'Waiting for camera connection'}</div></div>
+      <aside className="detection-card"><p className="eyebrow">CURRENT DETECTION</p><h2>{status.data?.classification || 'NONE'}</h2><div className="confidence"><span>CONFIDENCE</span><strong>{((status.data?.confidence || 0) * 100).toFixed(1)}%</strong></div><div className="live-component-list">{[['CAMERA', 'camera'], ['OPENCV ENGINE', 'opencv'], ['AI CLASSIFIER', 'classifier']].map(([label, key]) => <div key={key}><span>{label}</span><b className={components[key] ? 'online' : 'offline'}>{components[key] ? 'Connected' : 'Disconnected'}</b></div>)}</div></aside>
+    </section>
+  </main>;
+}
+
+function ActivityRow({ label, value, width, tone }) { return <div className="activity-row"><span className={tone}>{label}</span><div className={`activity-bar ${tone}`}><i style={{ width }} /></div><b>{value}</b></div>; }
 
 createRoot(document.getElementById('root')).render(<App />);
